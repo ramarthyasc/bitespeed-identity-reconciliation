@@ -26,14 +26,26 @@ app.post('/identify', async (req, res) => {
     }
 
     // check db
-    const rows = await prisma.contact.findMany({
-        where: {
-            OR: [
-                { email: body.email ?? null },
-                { phoneNumber: body.phoneNumber === undefined ? null : JSON.stringify(body.phoneNumber) },
-            ]
-        }
-    })
+    let rows;
+    if (!body.email) {
+        rows = await prisma.contact.findMany({
+            where: { phoneNumber: JSON.stringify(body.phoneNumber) },
+        })
+    } else if (body.phoneNumber === undefined) {
+        rows = await prisma.contact.findMany({
+            where: { email: body.email }
+        })
+    } else {
+        rows = await prisma.contact.findMany({
+            where: {
+                OR: [
+                    { email: body.email},
+                    { phoneNumber: JSON.stringify(body.phoneNumber) },
+                ]
+            }
+        })
+    }
+
 
 
     // First time user -> email and phNo is null
@@ -56,9 +68,31 @@ app.post('/identify', async (req, res) => {
 
         return res.json(resbody);
     }
-
-
     // 
+
+    // New information (email || phone) && either common phone || email -> we get secondary addition. Otherwise skip
+    let isNewEmail = false;
+    let isNewPhone = false;
+
+    if (body.email) {
+        isNewEmail = rows.every((row) => {
+            return row.email !== body.email;
+        });
+    }
+    if (body.phoneNumber !== undefined) {
+        isNewPhone = rows.every((row) => {
+            return row.phoneNumber !== JSON.stringify(body.phoneNumber);
+        })
+    }
+
+    if (isNewEmail) {
+
+    }
+    // if ()
+
+
+    return res.sendStatus(200);
+
 
 
 })
