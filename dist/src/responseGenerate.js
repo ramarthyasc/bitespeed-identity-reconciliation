@@ -1,10 +1,5 @@
-// import type { Contact } from "../generated/prisma/client";
-import type { Contact } from "@prisma/client";
-
-export default function responseGenerate(primaryRow: Contact, secondaryRows: Contact[]) {
-
-    const emailHash: {[email: string]: string} = 
-        primaryRow.email ? {[primaryRow.email]: primaryRow.email} : {};
+export default function responseGenerate(primaryRow, secondaryRows) {
+    const emailHash = primaryRow.email ? { [primaryRow.email]: primaryRow.email } : {};
     const emails = secondaryRows.reduce((accum, curr) => {
         if (!curr.email || emailHash[curr.email]) {
             return accum;
@@ -13,10 +8,7 @@ export default function responseGenerate(primaryRow: Contact, secondaryRows: Con
         emailHash[curr.email] = curr.email;
         return accum;
     }, primaryRow.email ? [primaryRow.email] : []);
-
-
-    const phoneHash: {[phone: string]: string} = 
-        primaryRow.phoneNumber ? {[primaryRow.phoneNumber]: primaryRow.phoneNumber} : {};
+    const phoneHash = primaryRow.phoneNumber ? { [primaryRow.phoneNumber]: primaryRow.phoneNumber } : {};
     const phoneNumbers = secondaryRows.reduce((accum, curr) => {
         if (!curr.phoneNumber || phoneHash[curr.phoneNumber]) {
             return accum;
@@ -24,10 +16,8 @@ export default function responseGenerate(primaryRow: Contact, secondaryRows: Con
         accum.push(curr.phoneNumber);
         phoneHash[curr.phoneNumber] = curr.phoneNumber;
         return accum;
-    }, primaryRow.phoneNumber ? [primaryRow.phoneNumber] : [])
-
-
-    const secondaryIdHash: {[secid: string]: number} = {};
+    }, primaryRow.phoneNumber ? [primaryRow.phoneNumber] : []);
+    const secondaryIdHash = {};
     const secondaryContactIds = secondaryRows.reduce((accum, curr) => {
         if (!curr.id || secondaryIdHash[curr.id]) {
             return accum;
@@ -35,7 +25,7 @@ export default function responseGenerate(primaryRow: Contact, secondaryRows: Con
         accum.push(curr.id);
         secondaryIdHash[curr.id] = curr.id;
         return accum;
-    }, [] as number[])
-
+    }, []);
     return { emails, phoneNumbers, secondaryContactIds };
 }
+//# sourceMappingURL=responseGenerate.js.map
