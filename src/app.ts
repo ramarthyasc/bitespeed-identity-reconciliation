@@ -207,13 +207,22 @@ app.post('/identify', async (req, res) => {
 
         // if every row matching either the email or phone number - has same LinkedId- then return
         const linkedIds = rows.reduce((accum, curr) => {
-            if (!curr.linkedId || accum[curr.linkedId]) {
+            if (curr.linkedId === null) {
+                if (accum[curr.id]) {
+                    return accum;
+                }
+                accum[curr.id] = curr.id;
+                return accum;
+            }
+            if (accum[curr.linkedId]) {
                 return accum;
             }
             accum[curr.linkedId] = curr.linkedId;
             return accum;
         }, {} as { [key: string]: number })
 
+        // [1, null1], [2, null2], [null1], [null2] these are the only combinations where it's Only 1 CHAIN
+        // These all normalize/shrink to [1], [2], [1], [2] ie; only 1 length for each combo
         if (Object.values(linkedIds).length < 2) {
 
             const emailRow = (await findEmailRow(body.email))!;
@@ -233,20 +242,48 @@ app.post('/identify', async (req, res) => {
             return res.json(resbody);
         }
 
+        //if there are more than 1 linkedIds present (Maximum is 2), then chain should be mixed,
+        //with Primary as the smallest id
+        //
+        //These are the combinations when there are 2 linked chains : [1,null2], [2, null1], 
+        //[1,2,null1], [1,2,null2], [1,2,null1,null2], [null1, null2], [1,2]. These all normalize to [1,2]
+        //Object.values(linkedIds).length = 2, then :
+        const linkedIdsArray = Object.values(linkedIds);
 
+        const oldPrimaryId = Math.max(...linkedIdsArray);
+        const newPrimaryId = Math.min(...linkedIdsArray);
 
+        //convert oldPrimaryId to secondary
+        await prisma.contact.update({
+            where: { id: oldPrimaryId },
+            data: {
+                linkedId: newPrimaryId,
+                linkPrecedence: "secondary"
+            }
+        })
+        // convert every oldPrimaryId linked rows to target to newPrimaryId
+        await prisma.contact.updateMany({
+            where: { linkedId: oldPrimaryId },
+            data: {
+                linkedId: newPrimaryId
+            }
+        })
 
+        const primaryRow = (await findPrimaryRow(newPrimaryId))!;
+        const secondaryRows = await findSecondaryRows(newPrimaryId);
+
+        const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryRow, secondaryRows);
+        const resbody: IResponse = {
+            contact: {
+                primaryContactId: primaryRow.id,
+                emails: emails,
+                phoneNumbers: phoneNumbers,
+                secondaryContactIds: secondaryContactIds
+            }
+        }
+        return res.json(resbody);
 
     }
-
-
-
-
-
-    return res.sendStatus(200);
-
-
-
 })
 
 
