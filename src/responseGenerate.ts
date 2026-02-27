@@ -1,5 +1,5 @@
-// import type { Contact } from "../generated/prisma/client";
-import type { Contact } from "@prisma/client";
+import type { Contact } from "../generated/prisma/client.js";
+// import type { Contact } from "@prisma/client";
 
 export default function responseGenerate(primaryRow: Contact, secondaryRows: Contact[]) {
 

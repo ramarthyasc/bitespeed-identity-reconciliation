@@ -1,3 +1,4 @@
+// import type { Contact } from "@prisma/client";
 export default function responseGenerate(primaryRow, secondaryRows) {
     const emailHash = primaryRow.email ? { [primaryRow.email]: primaryRow.email } : {};
     const emails = secondaryRows.reduce((accum, curr) => {

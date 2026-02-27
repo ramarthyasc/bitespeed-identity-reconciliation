@@ -1,10 +1,10 @@
-import type { Contact } from "@prisma/client";
+import type { Contact } from "../generated/prisma/client.js";
 export declare function findPrimaryRow(primaryId: Contact["id"]): Promise<{
     id: number;
     phoneNumber: string | null;
     email: string | null;
     linkedId: number | null;
-    linkPrecedence: import("@prisma/client").$Enums.LinkPrecedence;
+    linkPrecedence: import("../generated/prisma/index.js").$Enums.LinkPrecedence;
     createdAt: Date;
     updatedAt: Date;
     deletedAt: Date | null;
@@ -14,7 +14,7 @@ export declare function findPhoneRow(phoneNumber: Contact["phoneNumber"]): Promi
     phoneNumber: string | null;
     email: string | null;
     linkedId: number | null;
-    linkPrecedence: import("@prisma/client").$Enums.LinkPrecedence;
+    linkPrecedence: import("../generated/prisma/index.js").$Enums.LinkPrecedence;
     createdAt: Date;
     updatedAt: Date;
     deletedAt: Date | null;
@@ -24,7 +24,7 @@ export declare function findSecondaryRows(primaryId: Contact["id"]): Promise<{
     phoneNumber: string | null;
     email: string | null;
     linkedId: number | null;
-    linkPrecedence: import("@prisma/client").$Enums.LinkPrecedence;
+    linkPrecedence: import("../generated/prisma/index.js").$Enums.LinkPrecedence;
     createdAt: Date;
     updatedAt: Date;
     deletedAt: Date | null;
@@ -34,7 +34,7 @@ export declare function findEmailRow(email: Contact["email"]): Promise<{
     phoneNumber: string | null;
     email: string | null;
     linkedId: number | null;
-    linkPrecedence: import("@prisma/client").$Enums.LinkPrecedence;
+    linkPrecedence: import("../generated/prisma/index.js").$Enums.LinkPrecedence;
     createdAt: Date;
     updatedAt: Date;
     deletedAt: Date | null;

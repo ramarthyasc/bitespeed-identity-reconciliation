@@ -1,4 +1,4 @@
-import type { Contact } from "@prisma/client";
+import type { Contact } from "../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 
 export async function findPrimaryRow(primaryId: Contact["id"]) {
