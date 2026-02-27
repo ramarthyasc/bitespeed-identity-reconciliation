@@ -201,9 +201,37 @@ app.post('/identify', async (req, res) => {
 
     }
 
-    // if (!isNewPhone && !isNewEmail) {
-    //
-    // }
+    // Both Email and Phonenumber are present and both are not null-> 
+    if (!isNewPhone && !isNewEmail) {
+
+
+        // if the same row in the table is having same Email and same Phonenumber, then return;
+        const isEmailAndPhone = rows.some((row) => {
+            if (row.email === body.email && row.phoneNumber === body.phoneNumber) {
+                return true;
+            }
+            return false;
+        })
+
+        if (isEmailAndPhone) {
+            const primaryRow = rows.find(row => row.linkedId === null)!;
+            const secondaryRows = rows.filter((row) => row.linkedId !== null);
+
+            const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryRow, secondaryRows);
+            const resbody: IResponse = {
+                contact: {
+                    primaryContactId: primaryRow.id,
+                    emails: emails,
+                    phoneNumbers: phoneNumbers,
+                    secondaryContactIds: secondaryContactIds
+                }
+            }
+            return res.json(resbody);
+        }
+
+
+
+    }
 
 
 
