@@ -205,17 +205,21 @@ app.post('/identify', async (req, res) => {
     if (!isNewPhone && !isNewEmail) {
 
 
-        // if the same row in the table is having same Email and same Phonenumber, then return;
-        const isEmailAndPhone = rows.some((row) => {
-            if (row.email === body.email && row.phoneNumber === body.phoneNumber) {
-                return true;
+        // if every row matching either the email or phone number - has same LinkedId- then return
+        const linkedIds = rows.reduce((accum, curr) => {
+            if (!curr.linkedId || accum[curr.linkedId]) {
+                return accum;
             }
-            return false;
-        })
+            accum[curr.linkedId] = curr.linkedId;
+            return accum;
+        }, {} as { [key: string]: number })
 
-        if (isEmailAndPhone) {
-            const primaryRow = rows.find(row => row.linkedId === null)!;
-            const secondaryRows = rows.filter((row) => row.linkedId !== null);
+        if (Object.values(linkedIds).length < 2) {
+
+            const emailRow = (await findEmailRow(body.email))!;
+            const primaryId = !emailRow.linkedId ? emailRow.id : emailRow.linkedId;
+            const primaryRow = (await findPrimaryRow(primaryId))!;
+            const secondaryRows = await findSecondaryRows(primaryId);
 
             const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryRow, secondaryRows);
             const resbody: IResponse = {
@@ -228,6 +232,8 @@ app.post('/identify', async (req, res) => {
             }
             return res.json(resbody);
         }
+
+
 
 
 
