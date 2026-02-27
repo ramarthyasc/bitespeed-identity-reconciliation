@@ -29,6 +29,10 @@ const RequestSchema = z.object({
     phoneNumber: z.number().optional(),
 })
 
+app.get('/', (req, res) => {
+    res.send("Hello Amarthya here, /identify is the api endpoint")
+})
+
 app.post('/identify', async (req, res) => {
 
     const unverifiedReqbody: IRequest = req.body;
