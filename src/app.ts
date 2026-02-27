@@ -1,5 +1,6 @@
 import express from "express";
 import { prisma } from "../lib/prisma";
+import responseGenerate from "./responseGenerate";
 
 const app = express();
 app.use(express.json());
@@ -39,7 +40,7 @@ app.post('/identify', async (req, res) => {
         rows = await prisma.contact.findMany({
             where: {
                 OR: [
-                    { email: body.email},
+                    { email: body.email },
                     { phoneNumber: JSON.stringify(body.phoneNumber) },
                 ]
             }
@@ -48,7 +49,7 @@ app.post('/identify', async (req, res) => {
 
 
 
-    // First time user -> email and phNo is null
+    // First time user -> WHEN : Both are new || One is undefined & Other is new
     if (!rows.length) {
         const row = await prisma.contact.create({
             data: {
@@ -70,25 +71,86 @@ app.post('/identify', async (req, res) => {
     }
     // 
 
-    // New information (email || phone) && either common phone || email -> we get secondary addition. Otherwise skip
-    let isNewEmail = false;
-    let isNewPhone = false;
 
-    if (body.email) {
-        isNewEmail = rows.every((row) => {
-            return row.email !== body.email;
-        });
-    }
-    if (body.phoneNumber !== undefined) {
-        isNewPhone = rows.every((row) => {
-            return row.phoneNumber !== JSON.stringify(body.phoneNumber);
-        })
+    // One is undefined, other is common -> Then return the primary & secondaries
+    if (!body.email || body.phoneNumber === undefined) {
+        if (!body.email) {
+            const primaryPhoneRow = await prisma.contact.findFirst({
+                where: {
+                    AND: [
+                        { phoneNumber: JSON.stringify(body.phoneNumber) },
+                        { linkPrecedence: "primary" }
+                    ]
+                }
+            })
+            const secondaryPhoneRows = await prisma.contact.findMany({
+                where: {
+                    linkedId: primaryPhoneRow!.id
+                }
+            })
+
+            const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryPhoneRow!, secondaryPhoneRows);
+            const resbody: IResponse = {
+                contact: {
+                    primaryContactId: primaryPhoneRow!.id,
+                    emails: emails,
+                    phoneNumbers: phoneNumbers,
+                    secondaryContactIds: secondaryContactIds
+                }
+            }
+            return res.json(resbody);
+
+        } else {
+            const primaryEmailRow = await prisma.contact.findFirst({
+                where: {
+                    AND: [
+                        { email: body.email },
+                        { linkPrecedence: "primary" }
+                    ]
+                }
+            })
+            const secondaryEmailRows = await prisma.contact.findMany({
+                where: {
+                    linkedId: primaryEmailRow!.id
+                }
+            })
+
+            const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryEmailRow!, secondaryEmailRows);
+            const resbody: IResponse = {
+                contact: {
+                    primaryContactId: primaryEmailRow!.id,
+                    emails: emails,
+                    phoneNumbers: phoneNumbers,
+                    secondaryContactIds: secondaryContactIds
+                }
+            }
+            return res.json(resbody);
+
+        }
     }
 
-    if (isNewEmail) {
+    // // Check if there is any New information (email || phone) }}} 
+    // let isNewEmail = false;
+    // let isNewPhone = false;
+    //
+    //
+    // if (body.email) {
+    //     isNewEmail = rows.every((row) => {
+    //         return row.email !== body.email;
+    //     });
+    // }
+    // if (body.phoneNumber !== undefined) {
+    //     isNewPhone = rows.every((row) => {
+    //         return row.phoneNumber !== JSON.stringify(body.phoneNumber);
+    //     })
+    // }
+    //
+    // //Here, something common will always be present and it won't be null. Because - if everything was new, 
+    // //then It would have created the contact above
+    // if (isNewEmail && !isNewPhone) {
+    //     primaryPhoneId = 
+    // }
 
-    }
-    // if ()
 
 
     return res.sendStatus(200);
