@@ -51,7 +51,7 @@ app.post('/identify', async (req, res) => {
     let rows;
     if (!body.email) {
         rows = await prisma.contact.findMany({
-            where: { phoneNumber: body.phoneNumber},
+            where: { phoneNumber: body.phoneNumber },
         })
     } else if (!body.phoneNumber) {
         rows = await prisma.contact.findMany({
@@ -62,7 +62,7 @@ app.post('/identify', async (req, res) => {
             where: {
                 OR: [
                     { email: body.email },
-                    { phoneNumber: body.phoneNumber},
+                    { phoneNumber: body.phoneNumber },
                 ]
             }
         })
@@ -136,69 +136,74 @@ app.post('/identify', async (req, res) => {
         }
     }
 
-    // // Check if there is any New information (email || phone) }}} 
-    // let isNewEmail = false;
-    // let isNewPhone = false;
+    // Check if there is any New information (email || phone) }}} 
+    let isNewEmail = false;
+    let isNewPhone = false;
+
+
+    if (body.email) {
+        isNewEmail = rows.every((row) => {
+            return row.email !== body.email;
+        });
+    }
+    if (body.phoneNumber) {
+        isNewPhone = rows.every((row) => {
+            return row.phoneNumber !== body.phoneNumber;
+        })
+    }
+
+    //Here, something common will always be present and it won't be null. Because - if everything was new, 
+    //then It would have created the contact above
+
+    // One is New, and other is common -> make it secondary, -> no chain changes
+    if (isNewEmail && !isNewPhone) {
+        // find the primary using phone
+        const phoneRow = (await findPhoneRow(body.phoneNumber))!;
+        const primaryId = !phoneRow.linkedId ? phoneRow.id : phoneRow.linkedId;
+        const primaryPhoneRow = (await findPrimaryRow(primaryId))!;
+        // make the req body - as secondary
+        await createSecondaryRow(body.email, body.phoneNumber, primaryPhoneRow);
+        //findall secondaries
+        const secondaryPhoneRows = await findSecondaryRows(primaryId);
+
+        const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryPhoneRow, secondaryPhoneRows);
+        const resbody: IResponse = {
+            contact: {
+                primaryContactId: primaryPhoneRow.id,
+                emails: emails,
+                phoneNumbers: phoneNumbers,
+                secondaryContactIds: secondaryContactIds
+            }
+        }
+        return res.json(resbody);
+
+    } else if (isNewPhone && !isNewEmail) {
+
+        // find the primary using email
+        const emailRow = (await findEmailRow(body.email))!;
+        const primaryId = !emailRow.linkedId ? emailRow.id : emailRow.linkedId;
+        const primaryEmailRow = (await findPrimaryRow(primaryId))!;
+        // make the req body - as secondary
+        await createSecondaryRow(body.email, body.phoneNumber, primaryEmailRow);
+        //findall secondaries
+        const secondaryEmailRows = await findSecondaryRows(primaryId);
+
+        const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryEmailRow, secondaryEmailRows);
+        const resbody: IResponse = {
+            contact: {
+                primaryContactId: primaryEmailRow.id,
+                emails: emails,
+                phoneNumbers: phoneNumbers,
+                secondaryContactIds: secondaryContactIds
+            }
+        }
+        return res.json(resbody);
+
+    }
+
+    // if (!isNewPhone && !isNewEmail) {
     //
-    //
-    // if (body.email) {
-    //     isNewEmail = rows.every((row) => {
-    //         return row.email !== body.email;
-    //     });
     // }
-    // if (body.phoneNumber) {
-    //     isNewPhone = rows.every((row) => {
-    //         return row.phoneNumber !== body.phoneNumber;
-    //     })
-    // }
-    //
-    // //Here, something common will always be present and it won't be null. Because - if everything was new, 
-    // //then It would have created the contact above
-    //
-    // // One is New, and other is common -> make it secondary, -> no chain changes
-    // if (isNewEmail && !isNewPhone) {
-    //     // find the primary using phone
-    //     const primaryPhoneRow = await findPrimaryPhoneRow(body.phoneNumber)
-    //     // make the req body - as secondary
-    //     await createSecondaryRow(body.email, body.phoneNumber, primaryPhoneRow!);
-    //     //findall secondaries
-    //     const secondaryPhoneRows = await findSecondaryRows(primaryPhoneRow!);
-    //
-    //     const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryPhoneRow!, secondaryPhoneRows);
-    //     const resbody: IResponse = {
-    //         contact: {
-    //             primaryContactId: primaryPhoneRow!.id,
-    //             emails: emails,
-    //             phoneNumbers: phoneNumbers,
-    //             secondaryContactIds: secondaryContactIds
-    //         }
-    //     }
-    //     return res.json(resbody);
-    //
-    // } else if (isNewPhone && !isNewEmail) {
-    //     // find the primary using email
-    //     const primaryEmailRow = await findPrimaryEmailRow(body.email);
-    //     // make the req body - as secondary
-    //     await createSecondaryRow(body.email, body.phoneNumber, primaryEmailRow!);
-    //     //findall secondaries
-    //     const secondaryEmailRows = await findSecondaryRows(primaryEmailRow!);
-    //
-    //     const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryEmailRow!, secondaryEmailRows);
-    //     const resbody: IResponse = {
-    //         contact: {
-    //             primaryContactId: primaryEmailRow!.id,
-    //             emails: emails,
-    //             phoneNumbers: phoneNumbers,
-    //             secondaryContactIds: secondaryContactIds
-    //         }
-    //     }
-    //     return res.json(resbody);
-    //
-    // }
-    //
-    // // if (!isNewPhone && !isNewEmail) {
-    // //
-    // // }
 
 
 
