@@ -1,6 +1,8 @@
 import express from "express";
 import { prisma } from "../lib/prisma";
 import responseGenerate from "./responseGenerate";
+import { createSecondaryRow, findEmailRow, findPhoneRow, findPrimaryRow, findSecondaryRows } from "./queries";
+import z from "zod";
 
 const app = express();
 app.use(express.json());
@@ -14,25 +16,44 @@ interface IResponse {
     }
 }
 interface IRequest {
-    "email"?: string,
-    "phoneNumber"?: number
+    "email"?: string;
+    "phoneNumber"?: number;
+}
+interface IReqNormalized {
+    "email": string | null;
+    "phoneNumber": string | null;
 }
 
+const RequestSchema = z.object({
+    email: z.string().optional(),
+    phoneNumber: z.number().optional(),
+})
 
 app.post('/identify', async (req, res) => {
 
-    const body: IRequest = req.body;
-    if (!body.email && body.phoneNumber === undefined) {
+    const unverifiedReqbody: IRequest = req.body;
+    const verifiedReqbody = RequestSchema.safeParse(unverifiedReqbody);
+    if (!verifiedReqbody.success) {
         return res.sendStatus(400);
     }
+    const reqbody = verifiedReqbody.data;
+
+    const body: IReqNormalized = {
+        email: (reqbody.email === "" || reqbody.email === undefined) ? null : reqbody.email,
+        phoneNumber: reqbody.phoneNumber === undefined ? null : JSON.stringify(reqbody.phoneNumber)
+    }
+    if (!body.email && !body.phoneNumber) {
+        return res.sendStatus(400);
+    }
+
 
     // check db
     let rows;
     if (!body.email) {
         rows = await prisma.contact.findMany({
-            where: { phoneNumber: JSON.stringify(body.phoneNumber) },
+            where: { phoneNumber: body.phoneNumber},
         })
-    } else if (body.phoneNumber === undefined) {
+    } else if (!body.phoneNumber) {
         rows = await prisma.contact.findMany({
             where: { email: body.email }
         })
@@ -41,7 +62,7 @@ app.post('/identify', async (req, res) => {
             where: {
                 OR: [
                     { email: body.email },
-                    { phoneNumber: JSON.stringify(body.phoneNumber) },
+                    { phoneNumber: body.phoneNumber},
                 ]
             }
         })
@@ -53,8 +74,8 @@ app.post('/identify', async (req, res) => {
     if (!rows.length) {
         const row = await prisma.contact.create({
             data: {
-                email: body.email ?? null,
-                phoneNumber: body.phoneNumber === undefined ? null : JSON.stringify(body.phoneNumber),
+                email: body.email,
+                phoneNumber: body.phoneNumber,
             }
         })
 
@@ -72,27 +93,21 @@ app.post('/identify', async (req, res) => {
     // 
 
 
-    // One is undefined, other is common -> Then return the primary & secondaries
-    if (!body.email || body.phoneNumber === undefined) {
+    // One is undefined, other is common .The Common can be secondary or primary-> Then return the primary & secondaries
+    if (!body.email || !body.phoneNumber) {
         if (!body.email) {
-            const primaryPhoneRow = await prisma.contact.findFirst({
-                where: {
-                    AND: [
-                        { phoneNumber: JSON.stringify(body.phoneNumber) },
-                        { linkPrecedence: "primary" }
-                    ]
-                }
-            })
-            const secondaryPhoneRows = await prisma.contact.findMany({
-                where: {
-                    linkedId: primaryPhoneRow!.id
-                }
-            })
 
-            const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryPhoneRow!, secondaryPhoneRows);
+            const phoneRow = (await findPhoneRow(body.phoneNumber))!;
+            const primaryId = !phoneRow.linkedId ? phoneRow.id : phoneRow.linkedId;
+            const primaryPhoneRow = (await findPrimaryRow(primaryId))!;
+
+
+            const secondaryPhoneRows = await findSecondaryRows(primaryId);
+
+            const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryPhoneRow, secondaryPhoneRows);
             const resbody: IResponse = {
                 contact: {
-                    primaryContactId: primaryPhoneRow!.id,
+                    primaryContactId: primaryPhoneRow.id,
                     emails: emails,
                     phoneNumbers: phoneNumbers,
                     secondaryContactIds: secondaryContactIds
@@ -101,24 +116,16 @@ app.post('/identify', async (req, res) => {
             return res.json(resbody);
 
         } else {
-            const primaryEmailRow = await prisma.contact.findFirst({
-                where: {
-                    AND: [
-                        { email: body.email },
-                        { linkPrecedence: "primary" }
-                    ]
-                }
-            })
-            const secondaryEmailRows = await prisma.contact.findMany({
-                where: {
-                    linkedId: primaryEmailRow!.id
-                }
-            })
+            const emailRow = (await findEmailRow(body.email))!;
+            const primaryId = !emailRow.linkedId ? emailRow.id : emailRow.linkedId;
+            const primaryEmailRow = (await findPrimaryRow(primaryId))!;
 
-            const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryEmailRow!, secondaryEmailRows);
+            const secondaryEmailRows = await findSecondaryRows(primaryId);
+
+            const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryEmailRow, secondaryEmailRows);
             const resbody: IResponse = {
                 contact: {
-                    primaryContactId: primaryEmailRow!.id,
+                    primaryContactId: primaryEmailRow.id,
                     emails: emails,
                     phoneNumbers: phoneNumbers,
                     secondaryContactIds: secondaryContactIds
@@ -139,17 +146,61 @@ app.post('/identify', async (req, res) => {
     //         return row.email !== body.email;
     //     });
     // }
-    // if (body.phoneNumber !== undefined) {
+    // if (body.phoneNumber) {
     //     isNewPhone = rows.every((row) => {
-    //         return row.phoneNumber !== JSON.stringify(body.phoneNumber);
+    //         return row.phoneNumber !== body.phoneNumber;
     //     })
     // }
     //
     // //Here, something common will always be present and it won't be null. Because - if everything was new, 
     // //then It would have created the contact above
+    //
+    // // One is New, and other is common -> make it secondary, -> no chain changes
     // if (isNewEmail && !isNewPhone) {
-    //     primaryPhoneId = 
+    //     // find the primary using phone
+    //     const primaryPhoneRow = await findPrimaryPhoneRow(body.phoneNumber)
+    //     // make the req body - as secondary
+    //     await createSecondaryRow(body.email, body.phoneNumber, primaryPhoneRow!);
+    //     //findall secondaries
+    //     const secondaryPhoneRows = await findSecondaryRows(primaryPhoneRow!);
+    //
+    //     const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryPhoneRow!, secondaryPhoneRows);
+    //     const resbody: IResponse = {
+    //         contact: {
+    //             primaryContactId: primaryPhoneRow!.id,
+    //             emails: emails,
+    //             phoneNumbers: phoneNumbers,
+    //             secondaryContactIds: secondaryContactIds
+    //         }
+    //     }
+    //     return res.json(resbody);
+    //
+    // } else if (isNewPhone && !isNewEmail) {
+    //     // find the primary using email
+    //     const primaryEmailRow = await findPrimaryEmailRow(body.email);
+    //     // make the req body - as secondary
+    //     await createSecondaryRow(body.email, body.phoneNumber, primaryEmailRow!);
+    //     //findall secondaries
+    //     const secondaryEmailRows = await findSecondaryRows(primaryEmailRow!);
+    //
+    //     const { emails, phoneNumbers, secondaryContactIds } = responseGenerate(primaryEmailRow!, secondaryEmailRows);
+    //     const resbody: IResponse = {
+    //         contact: {
+    //             primaryContactId: primaryEmailRow!.id,
+    //             emails: emails,
+    //             phoneNumbers: phoneNumbers,
+    //             secondaryContactIds: secondaryContactIds
+    //         }
+    //     }
+    //     return res.json(resbody);
+    //
     // }
+    //
+    // // if (!isNewPhone && !isNewEmail) {
+    // //
+    // // }
+
+
 
 
 
